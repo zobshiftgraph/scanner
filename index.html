@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <style>
+    body { font-family: sans-serif; padding: 20px; background: #f4f4f9; }
+    .container { max-width: 500px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; font-size: 16px; }
+    
+    /* Buttons */
+    .btn { width: 100%; padding: 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; margin-bottom: 10px; color: white;}
+    .btn-submit { background: #28a745; }
+    .btn-cam { background: #007bff; }
+    .btn-stop { background: #dc3545; display: none; } /* Hidden by default */
+    
+    .status { margin-top: 15px; font-weight: bold; text-align: center; }
+    
+    /* Camera Viewport */
+    #reader { width: 100%; margin-bottom: 15px; display: none; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h2 style="text-align:center;">Mobile Scanner</h2>
+  
+  <div id="reader"></div>
+  
+  <button class="btn btn-cam" id="startBtn" onclick="startCamera()">📷 Open Camera</button>
+  <button class="btn btn-stop" id="stopBtn" onclick="stopCamera()">❌ Close Camera</button>
+
+  <label>Item Name</label>
+  <input type="text" id="itemName" placeholder="Enter item name first...">
+
+  <label>Barcode</label>
+  <input type="text" id="barcode" placeholder="Scan or type barcode...">
+
+  <button class="btn btn-submit" onclick="sendData()">Submit to Spreadsheet</button>
+  
+  <div class="status" id="statusMessage"></div>
+</div>
+
+<script>
+  // --- CONFIGURATION ---
+  const scriptURL = 'YOUR_GOOGLE_SCRIPT_URL_HERE'; 
+  // ---------------------
+
+  let html5QrcodeScanner;
+
+  function startCamera() {
+    document.getElementById('reader').style.display = 'block';
+    document.getElementById('startBtn').style.display = 'none';
+    document.getElementById('stopBtn').style.display = 'block';
+
+    html5QrcodeScanner = new Html5Qrcode("reader");
+    
+    // Config: Prefer back camera, try to scan standard 1D barcodes
+    const config = { fps: 10, qrbox: { width: 250, height: 150 } };
+    
+    html5QrcodeScanner.start(
+      { facingMode: "environment" }, // "environment" uses the back camera
+      config,
+      onScanSuccess
+    ).catch(err => {
+      alert("Error starting camera: " + err);
+    });
+  }
+
+  function stopCamera() {
+    if (html5QrcodeScanner) {
+        html5QrcodeScanner.stop().then(() => {
+            document.getElementById('reader').style.display = 'none';
+            document.getElementById('startBtn').style.display = 'block';
+            document.getElementById('stopBtn').style.display = 'none';
+        }).catch(err => {
+            console.error("Failed to stop", err);
+        });
+    }
+  }
+
+  function onScanSuccess(decodedText, decodedResult) {
+    // 1. Fill the input box with the scanned code
+    document.getElementById('barcode').value = decodedText;
+    
+    // 2. Play a beep (optional, gives feedback)
+    // let beep = new Audio('https://www.soundjay.com/button/beep-07.wav');
+    // beep.play();
+
+    // 3. Stop the camera automatically after a successful scan
+    stopCamera();
+
+    // 4. Update status
+    document.getElementById('statusMessage').innerText = "Scanned: " + decodedText;
+    document.getElementById('statusMessage').style.color = "blue";
+  }
+
+  function sendData() {
+    var item = document.getElementById("itemName").value;
+    var code = document.getElementById("barcode").value;
+    var status = document.getElementById("statusMessage");
+
+    if(!code) {
+      status.innerText = "No barcode data found!";
+      status.style.color = "red";
+      return;
+    }
+
+    status.innerText = "Sending to Google Sheets...";
+    status.style.color = "blue";
+
+    fetch(scriptURL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ itemName: item, barcode: code })
+    })
+    .then(response => {
+      status.innerText = "Saved Successfully!";
+      status.style.color = "green";
+      document.getElementById("barcode").value = "";
+      document.getElementById("itemName").value = "";
+    })
+    .catch(error => {
+      status.innerText = "Error!";
+      console.error('Error!', error.message);
+    });
+  }
+</script>
+
+</body>
+</html>
